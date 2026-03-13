@@ -108,7 +108,7 @@ const calculateIgnore = (origin: number, range: number): number => {
 };
 
 export const getImprovement = (current: PowerStats, job: JobInfo, deltas: Partial<PowerStats & { allP: number }>): { total: number; breakdown: Record<string, number> } => {
-  const estimate = { ...current };
+  const estimate = JSON.parse(JSON.stringify(current)) as PowerStats;
 
   if (deltas.dmgP !== undefined) estimate.dmgP += deltas.dmgP;
   if (deltas.bossP !== undefined) estimate.bossP += deltas.bossP;
@@ -123,9 +123,14 @@ export const getImprovement = (current: PowerStats, job: JobInfo, deltas: Partia
   const updateStat = (key: 'str' | 'dex' | 'int' | 'luk') => {
     const d = deltas[key] as any;
     if (d) {
-      if (d.clear) estimate[key].clear += d.clear;
-      if (d.p) estimate[key].p += d.p;
-      if (d.unique) estimate[key].unique += d.unique;
+      if (typeof d === 'number') {
+        // Fallback for simple numeric delta (assumed clear base)
+        estimate[key].clear += d;
+      } else {
+        if (d.clear) estimate[key].clear += d.clear;
+        if (d.p) estimate[key].p += d.p;
+        if (d.unique) estimate[key].unique += d.unique;
+      }
     }
     estimate[key].total = estimate[key].clear * (1 + estimate[key].p + allStatP) + estimate[key].unique;
   };

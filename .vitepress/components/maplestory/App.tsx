@@ -548,11 +548,26 @@ const App: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-indigo-400" /> 設定 AI Key
+              <Settings className="w-5 h-5 text-indigo-400" /> API 金鑰設定
             </h2>
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">API Key</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Nexon Open API Key</label>
+                <input
+                  type="password"
+                  value={apiKey || ''}
+                  placeholder="live_..."
+                  className="w-full p-3 bg-slate-950 border border-slate-700 rounded-lg text-white focus:border-indigo-500 outline-none"
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setApiKey(val || null);
+                    if (val) localStorage.setItem('nexon_api_key', val);
+                    else localStorage.removeItem('nexon_api_key');
+                  }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Gemini API Key</label>
                 <input
                   type="password"
                   value={geminiKey || ''}

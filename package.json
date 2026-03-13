@@ -1,0 +1,48 @@
+{
+  "name": "holybear.tw",
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "@lando/vitepress-theme-default-plus": "^1.1.5",
+    "@tailwindcss/postcss": "^4.2.1",
+    "@vitejs/plugin-react": "^6.0.0",
+    "concurrently": "^9.2.1",
+    "markdown-it-task-lists": "^2.1.1",
+    "sass-embedded": "^1.98.0",
+    "tailwindcss": "^4.1.18",
+    "vitepress": "^2.0.0-alpha.16",
+    "vitepress-plugin-auto-sidebar": "^1.4.0",
+    "vue": "^3.5.30"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "animejs": "^4.3.6",
+    "autoprefixer": "^10.4.27",
+    "chart.js": "^4.5.1",
+    "date-fns": "^4.1.0",
+    "firebase": "^12.10.0",
+    "front-matter": "^4.0.2",
+    "lucide-react": "^0.577.0",
+    "lucide-vue-next": "^0.577.0",
+    "markdown-it": "^14.1.1",
+    "markdown-it-front-matter": "^0.2.4",
+    "medium-zoom": "^1.1.0",
+    "opencc-js": "^1.0.5",
+    "postcss": "^8.5.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-is": "^19.2.4",
+    "recharts": "^3.8.0",
+    "swiper": "^12.1.2",
+    "three": "^0.183.2",
+    "turndown": "^7.2.2",
+    "vue-chartjs": "^5.3.3",
+    "vue-instantsearch": "^4.24.1"
+  },
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "gen-en-blog": "node en/blog/gen-en-blog-placeholders.js"
+  }
+}

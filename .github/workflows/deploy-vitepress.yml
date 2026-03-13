@@ -1,0 +1,425 @@
+permissions:
+  contents: write
+  actions: read
+  pages: write
+  id-token: write
+  discussions: write
+
+name: 部署 VitePress 靜態網站到 GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  full-pipeline:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 遷出程式碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --- 新增：檢查 blog/en/blog/docs 是否有變動 ---
+      - name: 檢查內容是否有變動
+        id: detect-content-changed
+        run: |
+          CHANGED=0
+          # 比對有無 blog/, en/blog/, docs/ 相關變更
+          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E '^(blog/|en/blog/|docs/)' ; then
+            CHANGED=1
+          fi
+          echo "has_changed=$([[ $CHANGED -eq 1 ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+      # --- 下方步驟都加上條件判斷 ---
+
+      - name: 部屬日誌
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        run: |
+          deleted_any=0
+          for en_file in en/blog/*.md; do
+            [ ! -f "$en_file" ] && continue
+            base_file="blog/$(basename "$en_file")"
+            if [ ! -f "$base_file" ]; then
+              git rm "$en_file"
+              echo "Deleted $en_file (orphan)"
+              deleted_any=1
+            fi
+          done
+          if [ $deleted_any -eq 1 ]; then
+            git config --global user.name 'System Administrator'
+            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+            git commit -am "chore: sync delete en/blog files"
+            git pull --rebase origin main
+            git push || git push --force
+          else
+            echo "No en/blog files to delete."
+          fi
+
+      - name: 設定 Node.js 與快取
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+
+      - name: 安裝相依套件
+        run: yarn install
+
+
+      - name: 偵測並收集新文章 Metadata
+        id: collect-new-posts
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        run: |
+          set -e
+          
+          TARGET_DIR="blog/"
+          
+          # 只偵測本次提交中新增的 .md 檔案，並排除 index.md
+          NEW_FILES=$(git diff --name-only --diff-filter=A ${{ github.event.before }} ${{ github.sha }} | grep 'blog/.*\.md$' | grep -v 'index.md$' || true)
+          
+          if [ -z "$NEW_FILES" ]; then
+            echo "posts_metadata=[]" >> $GITHUB_OUTPUT 
+            echo "沒有偵測到新的文章，跳過討論串創建。"
+            exit 0
+          fi
+          
+          POSTS_METADATA="["
+          first=true
+          
+          for file_path in $NEW_FILES; do
+            if [ "$first" = false ]; then
+              POSTS_METADATA="${POSTS_METADATA},"
+            fi
+            
+            FILE_CONTENT=$(cat "$file_path")
+            TITLE=$(echo "$FILE_CONTENT" | awk -F': ' '/^title:/ {print $2; exit}' | sed 's/"//g' | xargs || echo "無標題文章")
+            SLUG=$(basename "$file_path" .md)
+            
+            JSON_ENTRY=$(printf '{"title": "%s", "slug": "%s"}' "$TITLE" "$SLUG")
+            POSTS_METADATA="${POSTS_METADATA}${JSON_ENTRY}"
+            
+            first=false
+          done
+          
+          POSTS_METADATA="${POSTS_METADATA}]"
+          echo "收集到的 Metadata: $POSTS_METADATA"
+          echo "posts_metadata=$POSTS_METADATA" >> $GITHUB_OUTPUT
+
+      - name: 執行 Discussion 創建 (Giscus)
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        uses: actions/github-script@v6
+        env:
+          CATEGORY_ID: 'DIC_kwDOJmguVs4Cqo90'
+          POSTS_METADATA_JSON: ${{ steps.collect-new-posts.outputs.posts_metadata }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const metadata = JSON.parse(process.env.POSTS_METADATA_JSON);
+            
+            if (metadata.length === 0) {
+                console.log('沒有文章 Metadata 可供處理，跳過 Discussion 創建。');
+                return;
+            }
+
+            console.log(`準備為 ${metadata.length} 篇文章創建討論串...`);
+            
+            const discussionCategoryId = process.env.CATEGORY_ID;
+            const repoOwner = '${{ github.repository_owner }}';
+            const repoName = '${{ github.event.repository.name }}';
+            const baseURL = 'https://holybear.tw/blog/';
+            
+            // 1. 獲取 Global Repository ID (節點 ID)
+            try {
+                const repoData = await github.graphql(
+                    `query($repoOwner: String!, $repoName: String!) {
+                        repository(owner: $repoOwner, name: $repoName) {
+                            id
+                        }
+                    }`, 
+                    { repoOwner, repoName }
+                );
+                var globalRepoId = repoData.repository.id;
+            } catch (error) {
+                console.error('❌ 致命錯誤：無法獲取 Global Repository ID。', error.message);
+                throw new Error('無法繼續執行：Global Repository ID 獲取失敗。');
+            }
+            
+            for (const post of metadata) {
+                // 使用 Giscus 期望的 path 格式作為標題 (例如: blog/2025-08-28)
+                const discussionTitle = `blog/${post.slug}`; 
+                const discussionBody = `文章標題: ${post.title}\n文章連結: ${baseURL}${post.slug}/\n\n---\n\n這是 Giscus 自動創建的討論串，用於初始化 Giscus 介面。`;
+                
+                console.log(`-> 處理文章: ${discussionTitle}`);
+
+                // 2. 執行創建 (Mutation)，並依賴 API 衝突檢查
+                try {
+                  const result = await github.graphql(
+                      `
+                      mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+                        createDiscussion(input: {
+                          repositoryId: $repositoryId,
+                          categoryId: $categoryId,
+                          title: $title,
+                          body: $body
+                        }) {
+                          discussion {
+                            url
+                          }
+                        }
+                      }
+                      `,
+                      {
+                        repositoryId: globalRepoId,
+                        categoryId: discussionCategoryId,
+                        title: discussionTitle, 
+                        body: discussionBody
+                      }
+                  );
+                  
+                  console.log(`✅ 討論串已創建: ${discussionTitle}`);
+                  console.log(`URL: ${result.createDiscussion.discussion.url}`);
+                } catch(error) {
+                   // 檢查是否為標題重複錯誤 (最準確的 API 錯誤訊息)
+                   if (error.message && error.message.includes('A discussion with that title already exists')) {
+                        console.log(`⚠️ 討論串已存在 (Mutation 衝突確認)，跳過創建: ${discussionTitle}`);
+                   } else {
+                        // 處理其他非預期錯誤 (例如權限不足)
+                        console.error(`❌ 討論串創建失敗 (非預期錯誤 - ${discussionTitle}):`, error.message);
+                   }
+                }
+            }
+
+      - name: 產生側邊欄
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        run: node .vitepress/components/generateSidebar.cjs
+
+      - name: 產生 sitemap.xml
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        run: node .vitepress/components/generateSitemap.cjs
+
+      - name: amend sidebar 進最新 commit（如有變更）
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git add .vitepress/sidebars/blog.sidebar.ts .vitepress/sidebars/blog.sidebar.en.ts public/sitemap.xml
+          if git diff --cached --quiet; then
+            echo "沒有 sidebar 或 sitemap 變更，無需 amend"
+          else
+            git commit --amend --no-edit
+            git push --force-with-lease
+            echo "已 amend sidebar / sitemap 進原本 commit"
+          fi
+
+      - name: Commit 並 push yarn.lock
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        run: |
+          git config --global user.name 'System Administrator'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet yarn.lock; then
+            echo "No changes to yarn.lock."
+          else
+            git add yarn.lock
+            git commit -m "chore: update yarn.lock [bot]"
+            git pull --rebase origin main
+            git push || git push --force
+          fi
+
+      - name: 備份、產生、還原並遞交英文 Blog 檔案
+        if: steps.detect-content-changed.outputs.has_changed == 'true'
+        shell: /usr/bin/bash -e {0}
+        run: |
+          # --- 階段 1: 備份所有已存在的英文檔案 ---
+          BACKUP_DIR="tmp_existing_en_files"
+          mkdir -p "$BACKUP_DIR"
+          echo "=> 階段 1: 備份所有已存在的英文文章..."
+
+          if [ -d "en/blog" ] && [ -n "$(ls -A en/blog/*.md 2>/dev/null)" ]; then
+            echo "    - 發現已存在的檔案，正在移至暫存區以避免被覆蓋..."
+            mv en/blog/*.md "$BACKUP_DIR/"
+          else
+            echo "    - en/blog/ 目錄為空或不存在，無需備份。"
+          fi
+
+          echo "=> 階段 2: 執行遞補檔案產生程序 (yarn gen-en-blog)..."
+          yarn gen-en-blog
+          echo "    - 產生程序完成。"
+
+          echo "=> 階段 3: 還原先前已存在的英文檔案..."
+          if [ -n "$(ls -A $BACKUP_DIR 2>/dev/null)" ]; then
+            mv -f "$BACKUP_DIR"/* en/blog/
+            echo "    - 已還原備份的檔案。"
+          else
+            echo "    - 沒有需要還原的檔案。"
+          fi
+          rm -rf "$BACKUP_DIR"
+
+          echo "=> 階段 4: 檢查是否有新檔案需要提交..."
+          git config --global user.name 'System Administrator'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add en/blog/
+
+          if git diff --cached --quiet; then
+            echo "    - 沒有新產生的遞補檔案需要提交。"
+          else
+            echo "    - 偵測到新產生的遞補檔案，正在提交..."
+            git commit -m "chore: auto-generate en blog placeholders"
+            git pull --rebase origin main
+            git push --set-upstream origin main || git push
+            echo "    - 新檔案已成功提交。"
+          fi
+
+      # 下面這些步驟建議還是 always run（就是內容沒動時仍可 build/部署/偵測新文/發通知）
+      - name: 清除 Vite/VitePress 快取
+        run: |
+          rm -rf .vitepress/.cache .vitepress/dist .vite node_modules/.vite
+
+      - name: 建置 VitePress 網站
+        env:
+          VITE_NEXON_API_KEY: ${{ secrets.VITE_NEXON_API_KEY }}
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+          VITE_DEFAULT_GEMINI_KEY: ${{ secrets.VITE_DEFAULT_GEMINI_KEY }}
+        run: yarn run build
+
+      - name: 設定 GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上傳靜態產物到 Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .vitepress/dist
+
+      - name: 正式部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # 新文章偵測 & Telegram 通知照原本邏輯即可
+      - name: 偵測新文章
+        id: detect-new-files
+        run: |
+          TARGET_DIR="blog/"
+          CURRENT_SHA="${{ github.sha }}"
+
+          is_null_sha() {
+            [ -z "$1" ] || [[ "$1" =~ ^0{40}$ ]]
+          }
+
+          if [ -n "${{ github.event.before }}" ] && git cat-file -e "${{ github.event.before }}" 2>/dev/null; then
+            LAST_COMMIT_SHA="${{ github.event.before }}"
+          elif git cat-file -e "${CURRENT_SHA}~1" 2>/dev/null; then
+            LAST_COMMIT_SHA="$(git rev-parse "${CURRENT_SHA}~1")"
+          else
+            LAST_COMMIT_SHA=""
+          fi
+
+          OUTPUT_FILE="new_post_files.txt"
+          DETECTED_FILES=""
+
+          if is_null_sha "$LAST_COMMIT_SHA"; then
+            DETECTED_FILES=$(git diff --name-only --diff-filter=A "${CURRENT_SHA}" -- "$TARGET_DIR")
+          else
+            DETECTED_FILES=$(git diff --name-only --diff-filter=A "${LAST_COMMIT_SHA}" "${CURRENT_SHA}" -- "$TARGET_DIR")
+          fi
+
+          echo "$DETECTED_FILES" | grep . > "$OUTPUT_FILE" || true
+          if [ -s "$OUTPUT_FILE" ]; then
+            echo "偵測到新文章，列表已儲存至 $OUTPUT_FILE"
+            echo "has_new_files=true" >> $GITHUB_OUTPUT
+          else
+            echo "沒有偵測到新文章"
+            echo "has_new_files=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 處理並發送 Telegram 通知
+        if: steps.detect-new-files.outputs.has_new_files == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ORIGINAL_COMMIT: ${{ github.sha }}
+        run: |
+            set -e
+            NEW_POST_FILES=$(cat new_post_files.txt)
+            if [ -z "$NEW_POST_FILES" ]; then
+            echo "文章列表為空，中止執行。"
+            exit 0
+            fi
+            BASE_URL="https://holybear.tw"
+            escape_markdownv2() {
+            printf "%s" "$1" | sed -e 's/[\\_*\[\]()~`>#+\-=|{}.!]/\\&/g'
+            }
+
+            for file_path in $NEW_POST_FILES; do
+            echo "Processing file: $file_path"
+    
+            file_content=$(cat "$file_path")
+            TITLE=$(echo "$file_content" | awk -F': ' '/^title:/ {print $2; exit}')
+            if [ -z "$TITLE" ]; then
+            TITLE=$(echo "$file_content" | awk -F'# ' '/^# / {print $2; exit}')
+            fi
+            [ -z "$TITLE" ] && TITLE="無標題文章"
+            CATEGORY=""
+            CATEGORY=$(echo "$file_content" | grep -A 1 -iE '^\s*category:' | grep -E '^\s*-\s*' | head -n1 | sed -E 's/^\s*-\s*(.*)/\1/')
+            [ -z "$CATEGORY" ] && CATEGORY=$(echo "$file_content" | grep -iE '^\s*category:\s*\[.*\]' | sed -E 's/.*\[\s*([^, ]*).*/\1/')
+            [ -z "$CATEGORY" ] && CATEGORY=$(echo "$file_content" | grep -iE '^\s*category:\s*[^-\[]+' | head -n1 | sed -E 's/^\s*category:\s*//')
+            CATEGORY=$(echo "$CATEGORY" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sed -E 's/[\x27"\/]//g')
+            if [ -n "$CATEGORY" ]; then
+            TITLE="【${CATEGORY}】${TITLE}"
+            fi
+            ARTICLE_SLUG=$(echo "$file_path" | sed -E 's|^blog/(.*)\.md$|\1|')
+            ARTICLE_URL="${BASE_URL}/blog/${ARTICLE_SLUG}"
+    
+            # ✨ START: 新增的等待檢查邏輯 ✨
+            echo "等待日誌網址生效：${ARTICLE_URL}"
+            timeout=180 # 最長等待 180 秒 (3 分鐘)
+            interval=20 # 每 20 秒檢查一次
+            elapsed=0
+            while [ $elapsed -lt $timeout ]; do
+            # 使用 curl 檢查 HTTP 狀態碼
+            response_code=$(curl -s -o /dev/null -w "%{http_code}" "${ARTICLE_URL}")
+            if [ "$response_code" -eq 200 ]; then
+              echo "✅ 日誌已上線！"
+            break
+            fi
+              echo "日誌網址尚未生效 (HTTP ${response_code})，等待 ${interval} 秒…"
+            sleep $interval
+            elapsed=$((elapsed + interval))
+            done
+
+            # 如果超時後網址仍然無法訪問，則跳過此檔案的通知
+            if [ $elapsed -ge $timeout ]; then
+              echo "❌ 等待日誌網址生效已逾時，跳過以下通知：$file_path"
+            continue # 繼續處理下一個檔案
+            fi
+            # ✨ END: 新增的等待檢查邏輯 ✨
+
+            COMMIT_MESSAGE=$(git log -1 --pretty=%B "$ORIGINAL_COMMIT")
+            AUTHOR_NAME=$(git log -1 --pretty=%an "$ORIGINAL_COMMIT")
+            ESCAPED_TITLE=$(escape_markdownv2 "$TITLE")
+            ESCAPED_COMMIT_MESSAGE=$(escape_markdownv2 "$COMMIT_MESSAGE")
+            ESCAPED_AUTHOR_NAME=$(escape_markdownv2 "$AUTHOR_NAME")
+    
+            MESSAGE=$'*📢 New push to GitHub*\n'
+            MESSAGE+=$'*'"${ESCAPED_TITLE}"$'*\n'
+            MESSAGE+=$'```commit\n'"${ESCAPED_COMMIT_MESSAGE}"$'\n```'
+            MESSAGE+=$'➡️ [點此閱讀文章]('"${ARTICLE_URL}"$')\n'
+            MESSAGE+='by `'"${ESCAPED_AUTHOR_NAME}"'`'
+    
+            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            --data-urlencode "parse_mode=MarkdownV2" \
+            --data-urlencode "disable_web_page_preview=false") # 確保這裡設為 false
+      
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知已成功發送：$file_path"
+            else
+              echo "❌ 無法發送 Telegram 通知：$file_path"
+              echo "Telegram API 回應：$RESPONSE"
+            fi
+            done

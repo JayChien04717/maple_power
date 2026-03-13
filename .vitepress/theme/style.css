@@ -1,0 +1,1035 @@
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+/* ==========================================================================
+   優化後 CSS（整合 & 去重）
+   變更重點：合併 :root 變數，移除重複樣式，分組相關區塊，保留必要覆蓋 (!important)
+   ========================================================================== */
+
+/* ==================== 全域變數 (合併) ==================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* brand colors */
+  --vp-c-brand: #00FFEE !important;
+  --vp-c-brand-light: #33FFFF !important;
+  --vp-c-brand-lighter: #66FFFF !important;
+  --vp-c-brand-lightest: #99FFFF !important;
+  --vp-c-brand-dark: #00CCEE !important;
+  --vp-c-brand-darker: #0099BB;
+  --vp-c-brand-dimm: rgba(100, 108, 255, 0.08) !important;
+  --vp-button-brand-text: #000000 !important;
+  --vp-button-brand-hover-text: #000000 !important;
+
+/* 強制使用藍色（indigo）作為品牌色，覆蓋 vitepress-theme-default-plus 的紅色 */
+  --vp-c-brand-1: var(--vp-c-indigo-1) !important;
+  --vp-c-brand-2: var(--vp-c-indigo-2) !important;
+  --vp-c-brand-3: var(--vp-c-indigo-3) !important;
+  --vp-c-brand-soft: var(--vp-c-indigo-soft) !important;
+
+  /* button */
+  --vp-button-brand-border: var(--vp-c-brand-light);
+  --vp-button-brand-text: black;
+  --vp-button-brand-bg: var(--vp-c-brand);
+  --vp-button-brand-hover-border: var(--vp-c-brand-light);
+  --vp-button-brand-hover-text: black;
+  --vp-button-brand-hover-bg: var(--vp-c-brand-light);
+  --vp-button-brand-active-border: var(--vp-c-brand-light);
+  --vp-button-brand-active-text: black;
+  --vp-button-brand-active-bg: var(--vp-button-brand-bg);
+
+  /* home hero */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #C1836C 0%, #F7E1C4 20%, #8F70FF 40%, #00FFEE 60%, #33FFFF 100%) !important;
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #C1836C 0%, #F7E1C4 20%, #8F70FF 40%, #00FFEE 60%, #33FFFF 100%) !important;
+  --vp-home-hero-image-filter: blur(100px);
+
+  /* layout */
+  --main-width: 1200px;
+  --main-padding: 24px;
+
+  /* glass backdrop (default light) */
+  --my-glass-bg: rgba(255, 255, 255, 0.1);
+  --panel-glass-bg: rgba(255, 255, 255, 0.15); /* Default Light Mode Panel Background - More transparent for glass effect */
+  --panel-text-color: var(--vp-c-text-1);
+}
+
+/* dark override for glass */
+html {
+  background-color: var(--vp-c-bg); /* Ensure html has background so body can be transparent */
+}
+
+body {
+  background-color: transparent !important; /* Allow z-index: -1 backgrounds to show in ALL modes */
+}
+
+html.dark body {
+  --vp-c-brand: #00FFEE !important;
+  --vp-c-brand-1: #00FFEE !important;
+  --vp-c-brand-2: #00FFEE !important;
+  --vp-c-brand-3: #00FFEE !important;
+  --vp-c-brand-soft: #00FFEE1A !important; /* 可用透明度 */
+  --my-glass-bg: rgba(0, 0, 0, 0.3);
+  --panel-glass-bg: rgba(0, 0, 0, 0.4) !important; /* Dark Mode Panel Background */
+  --panel-text-color: var(--vp-c-text-1) !important;
+}
+
+/* Christmas Theme Override (Forces Dark Glass even in Light Mode) */
+body.theme-christmas {
+  --panel-glass-bg: rgba(0, 0, 0, 0.6) !important;
+  --panel-text-color: #e6f1ff !important;
+}
+
+/* ==================== 主題切換動畫與遮罩 ==================== */
+/* 在 theme transition 過程中針對特定區塊覆蓋 divider / 背景等 */
+html body:has(.theme-transition-overlay) .VPSidebar,
+html body:has(.theme-transition-overlay) aside,
+html body:has(.theme-transition-overlay) .VPNav,
+html body:has(.theme-transition-overlay) .VPNavBar,
+html body:has(.theme-transition-overlay) .VPLocalNav {
+  --vp-c-divider: transparent !important;
+}
+
+/* 切換到淺色模式時：新背景立即顯示（避免白色閃現） */
+body:has(.theme-transition-bg-container[data-direction="to-light"])::before,
+body:has(.theme-transition-bg-container[data-direction="to-light"])::after {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: -2 !important;
+}
+.theme-transition-bg-container[data-direction="to-light"] {
+  z-index: -1 !important;
+}
+
+/* 首頁主題切換動畫：延遲顏色相關變化 */
+body:has(.theme-transition-bg-container) *:not(.theme-transition-bg-container):not(.theme-transition-bg-container *) {
+  transition: color 0.8s ease 0.4s,
+              background-color 0.8s ease 0.4s,
+              border-color 0.8s ease 0.4s,
+              box-shadow 0.8s ease 0.4s,
+              background 0.8s ease 0.4s !important;
+}
+
+/* 文章內頁主題切換動畫（排除 nav/sidebar 等） */
+html body:has(.theme-transition-overlay) *:not(.theme-transition-overlay):not(.VPNav):not(.VPNav *):not(.VPNavBar):not(.VPNavBar *):not(.VPLocalNav):not(.VPLocalNav *):not(.VPSidebar):not(.VPSidebar *):not(aside):not(aside *) {
+  transition-property: color, background-color, border-color, box-shadow, background !important;
+  transition-duration: 0.8s !important;
+  transition-timing-function: ease !important;
+  transition-delay: 0.3s !important;
+}
+
+/* 導航欄／側邊欄：文字延遲但背景透明 */
+html body:has(.theme-transition-overlay) .VPNav,
+html body:has(.theme-transition-overlay) .VPNav *,
+html body:has(.theme-transition-overlay) .VPNavBar,
+html body:has(.theme-transition-overlay) .VPNavBar *,
+html body:has(.theme-transition-overlay) .VPNavBar::before,
+html body:has(.theme-transition-overlay) .VPNavBar::after,
+html body:has(.theme-transition-overlay) .VPLocalNav,
+html body:has(.theme-transition-overlay) .VPLocalNav *,
+html body:has(.theme-transition-overlay) .VPLocalNav::before,
+html body:has(.theme-transition-overlay) .VPLocalNav::after {
+  transition: color 0.8s ease 0.3s !important;
+}
+
+/* VPLocalNav 背景立即透明 */
+html body:has(.theme-transition-overlay) .VPLocalNav,
+html body:has(.theme-transition-overlay) .VPLocalNav *,
+html body:has(.theme-transition-overlay) .VPLocalNav::before,
+html body:has(.theme-transition-overlay) .VPLocalNav::after {
+  background-color: transparent !important;
+  background: transparent !important;
+  @apply !backdrop-blur-none;
+  transition: none !important;
+  border-bottom-color: transparent !important;
+  border-color: transparent !important;
+}
+
+/* 動畫進行時隱藏分隔線（避免閃變） */
+html body:has(.theme-transition-overlay) .divider,
+html body:has(.theme-transition-overlay) .divider-line {
+  opacity: 0 !important;
+}
+
+/* 禁用 fadeInUp 等動畫（避免衝突） */
+body:has(.theme-transition-overlay) .VPDoc .vp-doc *,
+body:has(.theme-transition-bg-container) .VPDoc .vp-doc * {
+  animation: none !important;
+}
+
+/* 沒有動畫時的預設顏色過渡（比較輕） */
+html * {
+  transition: color 0.3s ease,
+              background-color 0.3s ease,
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
+}
+
+/* Patch: 保守的 pseudo 層級，避免被 stacking context 擋住 */
+body.is-home-page::before,
+body.is-home-page::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;            /* 保守值，與首頁內容 z-index:1 配合 */
+  pointer-events: none;
+}
+
+/* 確保首頁重要內容層在背景之上 */
+body.is-home-page .VPNavBar,
+body.is-home-page .VPContent,
+body.is-home-page .VPFooter {
+  position: relative;
+  z-index: 1;
+}
+
+/* 確保頁腳背景透明，讓漸變背景可見 */
+.VPFooter {
+  background-color: transparent !important;
+  border-top: none !important;
+}
+
+/* 確保首頁內容層在背景之上（不被背景遮蓋） */
+body.is-home-page .VPNavBar,
+body.is-home-page .VPFooter,
+body.is-home-page .VPContent,
+body.is-home-page .VPHero,
+body.is-home-page .VPHomeHero {
+  position: relative;
+  z-index: 1;
+  background-color: transparent !important;
+}
+
+/* ==================== 首頁按鈕樣式 ==================== */
+.VPHome .VPButton.brand {
+  transition: all 0.3s ease !important;
+  box-shadow: 0 0 20px rgba(0, 255, 238, 0.3) !important;
+  border-radius: 24px !important;
+}
+.VPHome .VPButton.brand:hover {
+  box-shadow: 0 0 30px rgba(0, 255, 238, 0.5) !important;
+  transform: translateY(-2px) !important;
+}
+.VPHome .VPButton.alt {
+  border: 2px solid var(--vp-c-divider) !important;
+  background: var(--vp-c-bg-soft) !important;
+  transition: all 0.3s ease !important;
+  color: var(--vp-c-text-1) !important;
+  border-radius: 24px !important;
+}
+html:not(.dark) .VPHome .VPButton.alt {
+  border-color: rgba(0, 200, 220, 0.3) !important;
+  background: rgba(240, 250, 255, 0.9) !important;
+  color: rgba(0, 150, 200, 1) !important;
+}
+.VPHome .VPButton.alt:hover {
+  border-color: var(--vp-c-brand) !important;
+  color: var(--vp-c-brand) !important;
+  background: rgba(0, 255, 238, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(0, 255, 238, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+html:not(.dark) .VPHome .VPButton.alt:hover {
+  background: rgba(0, 255, 238, 0.15) !important;
+  box-shadow: 0 2px 8px rgba(0, 255, 238, 0.2) !important;
+}
+
+/* ==================== Medium-zoom 圖片與覆蓋層 ==================== */
+.medium-zoom-overlay {
+  z-index: 9999 !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+.medium-zoom-image--opened {
+  z-index: 10000 !important;
+  position: relative;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+.vp-doc img:not(.no-zoom) { cursor: url('/MapleStory_cursor_hand.png'), pointer !important; }
+
+/* pager-link 玻璃 + hover (合併並統一規則) */
+.pager-link,
+.VPLink.link.pager-link,
+.VPLink.link.pager-link.next,
+.VPLink.link.pager-link.prev {
+  @apply !backdrop-blur-[8px] !bg-white/70;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.10);
+  border: 1.5px solid var(--vp-c-divider, #e0e0e0);
+  transition: background 0.3s, box-shadow 0.3s;
+  transform: translateZ(0);
+}
+html.dark .pager-link,
+html.dark .VPLink.link.pager-link,
+html.dark .VPLink.link.pager-link.next,
+html.dark .VPLink.link.pager-link.prev {
+  @apply !bg-[#1e1e1e]/70;
+  border: 1.5px solid var(--vp-c-divider, #333);
+}
+.pager-link:hover,
+.VPLink.link.pager-link:hover,
+.VPLink.link.pager-link.next:hover,
+.VPLink.link.pager-link.prev:hover {
+  background: rgba(0,255,238,0.10);
+  box-shadow: 0 2px 12px 0 rgba(0,255,238,0.10), 0 2px 12px 0 rgba(0,0,0,0.12);
+  border-color: var(--vp-c-brand, #00FFEE);
+  color: #00b8b8;
+  transform: translateY(-1px) scale(1.015);
+  transition: background 0.18s, box-shadow 0.18s, border-color 0.18s, color 0.18s, transform 0.12s;
+}
+html.dark .pager-link:hover,
+html.dark .VPLink.link.pager-link:hover,
+html.dark .VPLink.link.pager-link.next:hover,
+html.dark .VPLink.link.pager-link.prev:hover {
+  background: rgba(0,255,238,0.08);
+  color: #00fff0;
+  border-color: #00fff0;
+}
+
+/* ==================== 游標 & 點擊元素 ==================== */
+/* 預設網站游標（僅一次定義） */
+body,
+.outline-title { 
+  cursor: url('/MapleStory_cursor_new.png'), auto !important; }
+
+
+/* 可點擊元素使用手指游標（合併常見選取器） */
+a, button, input[type="button"], input[type="submit"], input[type="reset"], [role="button"],
+.btn, .VPSidebar .text, .VPSidebarItem .text, .VPSidebarLink,
+.VPButton, .VPNavBarMenuLink, .VPNavBarMenuGroup, .VPLocalNavOutlineDropdown,
+.VPSwitchAppearance, .VPSocialLink, .VPFlyout, .action-btn, .navigation button,
+input[type="range"], .DocSearch-Button, .vp-doc a, [onclick], [role="tab"],
+[role="menuitem"], .clickable, .VPImage.logo, .VPNavBarTitle, .VPNavBarHamburger,
+.VPNavScreenMenuLink, .VPNavScreenMenuGroup, .outline-link, label, select, textarea {
+  cursor: url('/MapleStory_cursor_hand.png'), pointer !important;
+}
+
+/* 播放器與進度列特例（維持自訂游標） */
+.my-bgm-fab, .my-bgm-player, .my-bgm-player *, .my-bgm-player input[type="range"],
+.my-bgm-close, .my-bgm-prev-next-btn, .my-bgm-play-btn, .control-btn,
+.volume-icon, .playlist-overlay, .playlist-modal, .playlist-header, .main-controls,
+.marquee-container, .music-title-text, .volume-slider-vertical, .volume-slider-vertical-container,
+.music-info, .music-container.minimized .music-info {
+  cursor: url('/MapleStory_cursor_new.png'), auto !important;
+}
+.progress-container, .playlist-item, .playlist-item * {
+  cursor: url('/MapleStory_cursor_hand.png'), pointer !important;
+}
+.volume-slider-vertical::-webkit-slider-thumb,
+input[type="range"]::-webkit-slider-thumb,
+.volume-slider-vertical::-moz-range-thumb,
+input[type="range"]::-moz-range-thumb {
+  cursor: url('/MapleStory_cursor_hand.png'), pointer !important;
+}
+
+/* ==================== 表格樣式 統一處理 ==================== */
+.vp-doc table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin: 1rem 0;
+  border: 1px solid var(--vp-c-divider) !important;
+  border-radius: 0 !important;
+  display: table !important;
+}
+.vp-doc table th, .vp-doc table td {
+  border-right: 1px solid var(--vp-c-divider) !important;
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+  padding: 8px 16px;
+  white-space: nowrap;
+}
+
+/* ==================== Hero / logo / image (整合) ==================== */
+:root .image-src {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: 30px;
+  aspect-ratio: 1/1;
+}
+@media (min-width: 640px) {
+  :root .image-src { max-width: 238px; min-height: auto; border-radius: 30px; }
+}
+.VPImage.logo {
+  border-radius: 30px !important;
+  aspect-ratio: 1/1 !important;
+  object-fit: cover !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* 將 Navbar logo outer/container 與 img 合併處理 */
+.VPNavBarTitleLogo, .VPNavBarTitle-logo, .VPNavBarTitle > span, .VPNavBarTitle > div, .VPNavBarTitle {
+  border-radius: 6px !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+.VPNavBarTitleLogo img, .VPNavBarTitle-logo img, .VPNavBarTitle img, .VPNavBarTitle .VPImage.logo {
+  border-radius: 6px !important;
+  aspect-ratio: 1/1 !important;
+  object-fit: cover !important;
+  display: block !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* 響應式：手機時主圖尺寸調整 */
+@media (max-width: 640px) {
+  .VPHomeHero .image-container {
+    margin-bottom: 5px !important;
+    width: 100%;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    position: relative !important;
+    overflow: visible !important;
+  }
+  .VPHomeHero .VPImage.image-src, .VPHomeHero img.image-src {
+    display: block;
+    margin: 0 auto;
+    width: 80vw !important;
+    max-width: 200px !important;
+    min-width: 100px !important;
+    height: 80vw !important;
+    max-height: 200px !important;
+    min-height: 100px !important;
+    border-radius: 24px !important;
+    aspect-ratio: 1/1 !important;
+    object-fit: cover !important;
+  }
+}
+
+/* ==================== On this page (右側目錄) ==================== */
+/* 移除標題互動效果，僅為目錄項添加動畫 */
+.VPDocAsideOutline .VPDocAsideOutlineTitle,
+.VPDocAsideOutline .outline-title,
+[aria-label="Table of contents"] {
+  cursor: default;
+}
+.VPDocAsideOutline .outline-link {
+  display: inline-block;
+  transition: all 0.2s ease-out, transform 0.1s cubic-bezier(0.4,0,0.2,1);
+  opacity: 0.8;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.VPDocAsideOutline .outline-link:hover {
+  opacity: 1;
+  transform: translateX(2px);
+  color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-bg-soft);
+}
+.VPDocAsideOutline .outline-link:active { transform: scale(0.98); transition: all 0.1s ease-out; }
+.VPDocAsideOutline .outline-marker { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+.VPDocAsideOutline .outline-items { overflow: visible; }
+
+/* Aside container (外觀) */
+.VPDocAsideOutline {
+  @apply !backdrop-blur-[8px] !bg-white/70;
+  border-radius: 18px !important;
+  padding: 16px 18px !important;
+  margin-bottom: 1.5em !important;
+  border: 1.5px solid var(--vp-c-divider, #e0e0e0) !important;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+html.dark .VPDocAsideOutline {
+  @apply !bg-[#1e1e1e]/70;
+  border: 1.5px solid var(--vp-c-divider, #333) !important;
+}
+.VPDocAsideOutline .outline-items { border-radius: 12px !important; background: transparent !important; }
+
+/* 隱藏 aside-curtain（避免黑色底） */
+.aside-curtain {
+  display: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+
+/* ==================== Sidebar / Nav backdrop glass 徹底修復 ==================== */
+
+/* 定義全域導覽列背景變數 (預設透明) */
+body { 
+  --vp-nav-bg-color: transparent !important; 
+  --vp-sidebar-bg-color: transparent !important; 
+  --vp-local-nav-bg-color: transparent !important; 
+}
+
+/* -----------------------------------------------------------------
+   核心修復：VitePress 預設主題覆蓋
+   
+   問題核心：Tailwind v4 / PostCSS 與現代瀏覽器在處理 "grouping" 與 "stacking context" 時，
+   如果元素的父層已經有背景或濾鏡，子層的 backdrop-filter 可能會失效。
+   
+   策略變更：
+   1. 放棄 transform: translateZ(0) hack (可能在某些瀏覽器產生副作用)
+   2. 回歸最單純的 background-color (0.7) + backdrop-filter
+   3. 移除多餘的 saturate() 以排除變因
+   4. 確保 nav-bar 這一層是唯一負責背景的層級
+   ----------------------------------------------------------------- */
+
+.VPNav, .VPNavBar, .VPNavBar > .container, .VPNavBar > .wrapper {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* 一般頁面 (非首頁) 的導航列 - 分拆 Light/Dark 規則，避免 @apply dark: 生成不可預期的選擇器 */
+body:not(:has(.VPHome)):not(.is-home-page) .VPNavBar {
+  @apply !backdrop-blur-[8px] !bg-white/70 !border-b !border-black/5;
+}
+
+/* 深色模式 override */
+html.dark body:not(:has(.VPHome)):not(.is-home-page) .VPNavBar {
+  @apply !bg-[#1e1e1e]/70 !border-white/5 !shadow-sm;
+}
+
+/* -----------------------------------------------------------------
+   首頁導航：透明/模糊行為 (滾動後)
+   ----------------------------------------------------------------- */
+body:has(.VPHome) .VPNavBar:not(.top),
+body.is-home-page .VPNavBar:not(.top) {
+  @apply !backdrop-blur-[8px] !bg-white/70 !border-b !border-black/5;
+}
+
+html.dark body:has(.VPHome) .VPNavBar:not(.top),
+html.dark body.is-home-page .VPNavBar:not(.top) {
+  @apply !bg-[#1e1e1e]/70 !border-white/5;
+}
+
+/* 首頁頂部：全透明 */
+body:has(.VPHome) .VPNavBar.top,
+body.is-home-page .VPNavBar.top {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: none !important;
+}
+
+/* -------------------- Sidebar 修復 -------------------- */
+body .VPSidebar {
+  @apply !backdrop-blur-[8px] !bg-white/70;
+}
+
+html.dark body .VPSidebar {
+  @apply !bg-[#1e1e1e]/70;
+}
+
+html.dark body .VPSidebar.open {
+  @apply !bg-[#1e1e1e]/90;
+}
+html:not(.dark) body .VPSidebar.open {
+  @apply !bg-white/90;
+}
+
+/* 手機選單背景 - 強制修復 */
+.VPNavScreen {
+  @apply !backdrop-blur-[8px] !bg-white/85;
+}
+
+html.dark .VPNavScreen {
+  @apply !bg-[#1e1e1e]/85;
+}
+
+/* Curtain 處理（避免遮罩擋住模糊） */
+body:not(:has(.VPHome)):not(.is-home-page) .VPSidebar .curtain {
+  background: transparent !important;
+  box-shadow: none !important;
+  z-index: 0 !important;
+}
+
+/* ==================== DocSearch / Navbar 搜尋按鈕 ==================== */
+.DocSearch-Button {
+  @apply !backdrop-blur-[16px] !bg-white/10;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.DocSearch-Button:hover,
+.DocSearch-Button:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background-color: rgba(255,255,255,0.1) !important;
+}
+.DocSearch-Button-Container .DocSearch-Search-Icon,
+.DocSearch-Button-Placeholder { color: var(--vp-c-text-1) !important; }
+.DocSearch-Button-Keys .DocSearch-Button-Key {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: var(--vp-c-text-1) !important;
+}
+.DocSearch-Button-Key svg { stroke: var(--vp-c-text-1) !important; }
+.VPNavBarSearch { flex-grow: 1; display: flex; justify-content: flex-end; align-items: center; }
+.VPDoc .VPNavBarSearch, .VPContent .VPNavBarSearch { justify-content: flex-end !important; }
+
+@media (max-width: 768px) {
+  .VPNavBarSearch { flex-grow: 0; justify-content: flex-end; align-items: center; }
+  .DocSearch-Button {
+    width: auto;
+    margin-left: auto;
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none; 
+    @apply !backdrop-blur-none;
+  }
+  .DocSearch-Button:hover,
+  .DocSearch-Button:focus { background-color: transparent !important; border: none !important; outline: none !important; box-shadow: none !important; }
+}
+
+/* 手機版移除 navbar 底線 */
+@media (max-width: 1200px) {
+  .VPNavBar { border-bottom: none !important; box-shadow: none !important; }
+  .VPNavBar::after, .VPNavBar::before { border-bottom: none !important; box-shadow: none !important; background: none !important; height: 0 !important; }
+  .divider, .divider-line { display: none !important; }
+}
+
+/* ==================== 導覽列與內容寬度 (響應式) ==================== */
+@media (min-width: 1201px) {
+  body:not(.is-blog-page) .VPNavBar {
+    padding-left: calc(max(0px, calc(50vw - var(--main-width) / 2)) - 25px);
+    padding-right: max(0px, calc(50vw - var(--main-width) / 2));
+  }
+  body:not(.is-blog-page) .VPNavBar .container {
+    width: var(--main-width) !important;
+    max-width: none !important;
+    margin: 0 auto;
+    padding-left: var(--main-padding);
+    padding-right: var(--main-padding);
+    box-sizing: border-box;
+  }
+  body:not(.is-blog-page) .VPNavBar .nav-actions {
+    position: absolute;
+    top: 0;
+    right: calc(max(0px, calc(50vw - var(--main-width) / 2)) + var(--main-padding));
+  }
+  .VPHomeHero {
+    padding-left: calc(max(0px, calc(50vw - var(--main-width) / 2)) + var(--main-padding)) !important;
+    padding-right: calc(max(0px, calc(50vw - var(--main-width) / 2)) + var(--main-padding)) !important;
+  }
+  .VPHomeHero .container {
+    width: var(--main-width) !important;
+    max-width: none !important;
+    margin: 0 auto;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    box-sizing: border-box;
+  }
+}
+@media (max-width: 1200px) {
+  body:not(.is-blog-page) .VPNavBar { padding-left: 0 !important; padding-right: 0 !important; }
+  body:not(.is-blog-page) .vp-doc.container,
+  body:not(.is-blog-page) .VPContent .container {
+    width: 100%; max-width: 100%; min-width: 0; margin: 0; padding-left: 12px; padding-right: 12px; box-sizing: border-box;
+  }
+}
+@media (max-width: 768px) { :root { --main-padding: 0px; } }
+
+/* ==================== 手機選單與語言選單置中 ==================== */
+/* 手機版選單背景：與導航欄同步 */
+.VPNavScreen {
+  background-color: rgba(255, 255, 255, 0.01) !important;
+  backdrop-filter: blur(8px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  transform: translate3d(0, 0, 0);
+  will-change: backdrop-filter;
+}
+
+/* 非首頁時，強制保持透明以顯示模糊效果 */
+body:not(:has(.VPHome)):not(.is-home-page) .VPNavScreen {
+  @apply !backdrop-blur-[8px] !bg-white/1;
+}
+
+.VPNavScreen .VPNavScreenMenu .VPNavScreenMenuLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(255,255,255,0.12);
+  border-radius: 14px;
+  transition: background 0.2s, box-shadow 0.2s;
+  font-weight: 600;
+  font-size: 1.08em;
+  margin: 0.5em 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.VPNavScreen .VPNavScreenMenu .VPNavScreenMenuLink:hover {
+  background: rgba(0,255,238,0.18);
+  color: #00b8b8;
+  box-shadow: 0 4px 16px rgba(0,255,238,0.18);
+}
+
+/* 隱藏外部連結的小箭頭 */
+.vp-external-link-icon::after,
+.vp-external-link-icon::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* 手機選單底部語言選項置中 */
+.VPNavScreenTranslations.translations {
+  text-align: center;
+}
+.VPNavScreenTranslations.translations .VPNavScreenMenuLink {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+/* 語言選單標題與列表都置中 */
+.VPNavScreenTranslations.translations .title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+.VPNavScreenTranslations.translations .list {
+  text-align: center;
+  width: 100%;
+  padding: 0;
+}
+.VPNavScreenTranslations.translations .item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+.VPNavScreenTranslations.translations .VPLink.link {
+  text-align: center;
+  width: 100%;
+  padding: 0.5em 0;
+}
+
+/* 手機選單外觀切換區塊高斯模糊（字體大小、顏色與其他按鈕一致） */
+.VPNavScreenAppearance.appearance {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  @apply backdrop-blur-[8px] bg-white/10;
+  border-radius: 14px; /* 與其他按鈕一致 */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin: 0.5em 0;
+  padding: 0.7em 1.2em;
+  font-size: 1.08em;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+}
+.VPNavScreenAppearance.appearance .text {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.08em;
+  color: var(--vp-c-text-1);
+  width: auto;
+  height: auto;
+  pointer-events: none;
+}
+.VPNavScreenAppearance.appearance .VPSwitchAppearance {
+  position: absolute;
+  right: 1.2em;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: auto;
+}
+.VPNavScreenAppearance.appearance:hover {
+  background: rgba(0,255,238,0.18);
+  color: #00b8b8;
+  box-shadow: 0 6px 24px rgba(0,255,238,0.18);
+}
+.VPNavScreen {
+  overflow-y: auto !important;
+}
+.VPNavScreenMenuGroup {
+  overflow: visible !important;
+  height: auto !important;
+  max-height: none !important;
+}
+.VPNavScreenMenuGroup > .button {
+  min-height: 48px;
+  padding: 0.7em 1.2em;
+  box-sizing: border-box;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+}
+.VPNavScreenMenuGroup > .button .button-text {
+  flex: 1;
+  text-align: center;
+  padding-left: 18px;
+}
+.VPNavScreenMenuGroup > .button:hover {
+  background: rgba(0,255,238,0.18);
+  color: #00b8b8;
+  box-shadow: 0 4px 16px rgba(0,255,238,0.18);
+}
+.dark .VPNavScreenMenuGroup.open .button {
+  background: rgba(0,255,238,0.18) !important;
+  color: #00b8b8 !important;
+  box-shadow: 0 4px 16px rgba(0,255,238,0.18) !important;
+}
+/* 主題選單群組按鈕玻璃高斯模糊效果 */
+.VPNavScreenMenuGroup > .button {
+  background: rgba(255,255,255,0.12);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  font-weight: 600;
+  font-size: 1.08em;
+  margin: 0.5em 0;
+  transition: background 0.2s, box-shadow 0.2s;
+  @apply backdrop-blur-[8px];
+}
+.VPNavScreenMenuGroup > .button:hover {
+  background: rgba(0,255,238,0.18);
+  color: #00b8b8;
+  box-shadow: 0 4px 16px rgba(0,255,238,0.18);
+}
+.VPNavScreenMenuLink:active {
+  transform: scale(0.98) !important;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+
+/* ==================== 小調整 / 方便閱讀 ==================== */
+/* 首個 h2 標題微調（文章頁） */
+.vp-doc > div > h1:first-child,
+.vp-doc > div > h2:first-child { 
+  border-top: none !important; padding-top: 5px !important; margin-top: 5px !important; 
+}
+
+.vp-doc > div > h1:first-child .header-anchor,
+.vp-doc > div > h2:first-child .header-anchor { 
+  margin-top: -20px;
+}
+
+/* 首個 h1 和 h2 標題微調（編輯頁） */
+/* 針對沒有 blog 標頭的情況 */
+.markdown-preview.vp-doc > h1:first-child,
+.markdown-preview.vp-doc > h2:first-child {
+  border-top: none !important;
+  padding-top: 30px !important;
+  margin-top: 5px !important;
+}
+
+/* 針對勾選 blog 的情況（編輯頁） */
+.markdown-preview.vp-doc > .blog-post-header-injected + h1,
+.markdown-preview.vp-doc > .blog-post-header-injected + h2 {
+  border-top: none !important;
+  padding-top: 30px !important;
+  margin-top: 5px !important;
+}
+
+.markdown-preview.vp-doc > h2:first-child .header-anchor {
+  margin-top: -20px;
+}
+
+/* 只保留 aside 外層透明 */
+.aside { background: transparent !important; background-color: transparent !important; }
+
+/* Giscus placeholder 去背景 */
+.giscus-comments-placeholder { background-color: transparent !important; border: none !important; }
+
+/* Sidebar item 動態效果（保留但去除重複） */
+.VPSidebarItem .link, .VPSidebarItem a[href] {
+  transition: transform 0.2s ease-in-out !important;
+  transform-origin: center !important;
+  display: inline-block !important;
+}
+.VPSidebarItem .link:active, .VPSidebarItem a[href]:active { transform: scale(0.95) !important; }
+.VPSidebarItem .link:hover, .VPSidebarItem a[href]:hover { transform: scale(1.05) !important; }
+.VPSidebarItem > .text:not([href]), .VPSidebarGroup > .title, .VPSidebarItem.group > .text { transform: none !important; transition: none !important; }
+.VPSidebarItem .indicator { transition: opacity 0.5s ease-in-out !important; transform: none !important; }
+
+/* scroll behavior */
+html { scroll-behavior: smooth; }
+
+/* Algolia primary color */
+.DocSearch { --docsearch-primary-color: var(--vp-c-brand) !important; }
+
+/* Copy 按鈕中文提示 */
+:lang(zh) { --vp-code-copy-copied-text-content: "複製完成！"; }
+
+
+/* 首頁與列表頁（非 is-blog-page）導覽列下方黑線 */
+body:not(.is-blog-page) .divider,
+body:not(.is-blog-page) .divider-line {
+display: none !important;
+}
+
+/* 備選（如果上面沒被命中）——更具體選擇器，強制移除 navbar 的偽元素線 */
+body:has(.VPHome) .VPNavBar::before,
+body:has(.VPHome) .VPNavBar::after,
+body.is-home-page .VPNavBar::before,
+body.is-home-page .VPNavBar::after {
+  display: none !important;
+  height: 0 !important;
+  background: none !important;
+  border: none !important;
+}
+
+/* VPLocalNav 高斯模糊效果 */
+body:not(:has(.VPHome)):not(.is-home-page) .VPLocalNav {
+  @apply !backdrop-blur-[8px] !bg-white/1;
+}
+
+/* 確保右側目錄（On this page）過長文字以省略號顯示，並且占滿可用空間 */
+.VPDocAsideOutline .outline-items .outline-link,
+.VPDocAsideOutline .outline-link {
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  box-sizing: border-box !important;
+}
+
+/* 若 outline-link 包裹 icon 或 marker，確保文字區塊可伸縮（較具體） */
+.VPDocAsideOutline .outline-link .text,
+.VPDocAsideOutline .outline-link .label {
+  display: inline-block !important;
+  vertical-align: middle;
+  max-width: calc(100% - 40px) !important; /* 留空間給 icon/marker，可視情況調整 */
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* 若側邊目錄寬度被限制，讓它有足夠寬度顯示省略 */
+.VPDocAsideOutline {
+  overflow: hidden !important;
+  word-break: keep-all !important;
+}
+
+/* 語言選單背景 */
+.VPMenu {
+  @apply !backdrop-blur-[16px] !bg-white/70;
+}
+html.dark .VPMenu {
+  @apply !bg-[#1e1e1e]/70;
+}
+
+/* 首頁與文章列表 box 背景 */
+.VPLink.no-icon.VPFeature,
+.stat-card,
+.author-contribution-section,
+.filter-btn {
+  @apply !backdrop-blur-[1px] !bg-white/50;
+  border-radius: 18px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
+}
+html.dark .VPLink.no-icon.VPFeature,
+html.dark .stat-card,
+html.dark .author-contribution-section,
+html.dark .filter-btn {
+  @apply !bg-[#1e1e1e]/40;
+}
+.VPDocAside, .VPDocSidebar {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* button */
+.button .text {
+  color: var(--vp-c-text-1) !important;
+}
+.button[aria-expanded="true"] .text {
+  color: var(--vp-c-indigo-1) !important;
+}
+html.dark .button[aria-expanded="true"] .text {
+  color: #00FFEE !important;
+}
+/* 按鈕文字大小 */
+button, input, optgroup, select, textarea {
+  font-family: inherit;
+  font-size: 100%;
+  line-height: 1.15;
+  margin: 0;
+}
+
+/* ==================== 聖誕節主題強制樣式 ==================== */
+/* 將樣式移至全域，確保在所有頁面（包含 layout: page）都能生效 */
+
+/* 1. 變數覆蓋 */
+body.theme-christmas {
+  --vp-c-brand: #d93025 !important;
+  --vp-c-brand-light: #e57373 !important;
+  --vp-c-bg: #0a192f !important;
+  --vp-c-text-1: #e6f1ff !important;
+}
+
+/* 2. 標題發光效果 */
+body.theme-christmas h1,
+body.theme-christmas h2,
+body.theme-christmas h3,
+body.theme-christmas h4,
+body.theme-christmas h5,
+body.theme-christmas h6 {
+  color: #f0c44c !important;
+  text-shadow: 0 0 2px #ffffff, 0 0 8px #f0c44c, 0 0 14px #d93025 !important;
+}
+
+/* 3. 導航欄背景 (關鍵修復) */
+body.theme-christmas .VPNav,
+body.theme-christmas .VPNavBar,
+body.theme-christmas header,
+body.theme-christmas .VPPage .VPNav,
+body.theme-christmas .VPPage .VPNavBar {
+  background: linear-gradient(rgba(18, 18, 18, 0.75), rgba(18, 18, 18, 0.75)), url('/image/christmas/christmas2.png') repeat-x 0% 0% !important;
+  background-size: auto 60px !important;
+  border-bottom: 2px solid rgb(240, 196, 76) !important;
+}
+
+/* 4. 部落格頁面特殊處理 */
+body.theme-christmas.is-blog-page .VPNav,
+body.theme-christmas.is-blog-page .VPNavBar,
+body.theme-christmas.is-blog-page header {
+  border-bottom: none !important;
+}
+
+/* 5. Logo 與 Hero 圖片替換 */
+body.theme-christmas .VPImage.logo {
+  content: url('/image/christmas/christmas.png');
+}
+body.theme-christmas .VPHero .image-container .VPImage {
+  content: url('/image/christmas/christmas.png');
+}
+
+/* 6. 強制背景透明 (關鍵修復) */
+/* 確保 VitePress 的主要容器背景透明，讓底層的聖誕背景顯示出來 */
+body.theme-christmas .VPContent,
+body.theme-christmas .VPPage,
+body.theme-christmas .VPDoc {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+/* 針對特定頁面容器的透明化 */
+body.theme-christmas .container,
+body.theme-christmas .content,
+body.theme-christmas .content-container {
+  background-color: transparent !important;
+}
+
